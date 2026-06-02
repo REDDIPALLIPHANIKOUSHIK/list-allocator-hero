@@ -23,7 +23,6 @@ export type Database = {
           mobile: string
           name: string
           owner_id: string
-          password_hash: string
         }
         Insert: {
           country_code: string
@@ -33,7 +32,6 @@ export type Database = {
           mobile: string
           name: string
           owner_id: string
-          password_hash: string
         }
         Update: {
           country_code?: string
@@ -43,7 +41,6 @@ export type Database = {
           mobile?: string
           name?: string
           owner_id?: string
-          password_hash?: string
         }
         Relationships: []
       }

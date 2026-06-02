@@ -1,0 +1,1 @@
+ALTER TABLE public.agents DROP COLUMN IF EXISTS password_hash;
