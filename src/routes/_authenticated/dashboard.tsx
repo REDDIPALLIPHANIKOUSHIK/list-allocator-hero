@@ -1,144 +1,327 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Users, Upload, ListChecks, Trash2, Plus } from "lucide-react";
+import {
+  ArrowUpRight,
+  CheckCircle2,
+  FileSpreadsheet,
+  ListChecks,
+  LockKeyhole,
+  Plus,
+  Trash2,
+  Upload,
+  Users,
+} from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { createAgent, deleteAgent, listAgents } from "@/lib/agents.functions";
-import { distributeItems, listDistributedItems } from "@/lib/lists.functions";
 import { parseFile, type ParsedItem } from "@/lib/csv-parser";
+import { distributeItems, listDistributedItems } from "@/lib/lists.functions";
+
+const REQUIRED_AGENT_COUNT = 5;
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
     meta: [
-      { title: "Dashboard | Agent Manager" },
-      { name: "description", content: "Manage agents and distribute CSV lists." },
+      { title: "Dashboard | ListFlow" },
+      { name: "description", content: "Manage agents and distribute customer lists." },
     ],
   }),
   component: DashboardPage,
 });
 
 function DashboardPage() {
+  const listFn = useServerFn(listAgents);
+  const listsFn = useServerFn(listDistributedItems);
+  const { data: agents = [] } = useQuery({ queryKey: ["agents"], queryFn: () => listFn() });
+  const { data: lists } = useQuery({ queryKey: ["lists"], queryFn: () => listsFn() });
+  const assignedCount = lists?.items.length ?? 0;
+  const batchCount = new Set(lists?.items.map((item) => item.batch_id)).size;
+
   return (
-    <Tabs defaultValue="agents" className="w-full">
-      <TabsList className="grid w-full max-w-xl grid-cols-3">
-        <TabsTrigger value="agents"><Users className="h-4 w-4 mr-2" />Agents</TabsTrigger>
-        <TabsTrigger value="upload"><Upload className="h-4 w-4 mr-2" />Upload & Distribute</TabsTrigger>
-        <TabsTrigger value="lists"><ListChecks className="h-4 w-4 mr-2" />Distributed Lists</TabsTrigger>
-      </TabsList>
-      <TabsContent value="agents" className="mt-6"><AgentsPanel /></TabsContent>
-      <TabsContent value="upload" className="mt-6"><UploadPanel /></TabsContent>
-      <TabsContent value="lists" className="mt-6"><ListsPanel /></TabsContent>
-    </Tabs>
+    <div className="space-y-8">
+      <section className="overflow-hidden rounded-3xl border bg-[linear-gradient(120deg,oklch(0.28_0.10_260),oklch(0.20_0.07_260))] px-6 py-7 text-white shadow-xl sm:px-8">
+        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-2xl space-y-3">
+            <Badge className="border-white/20 bg-white/10 text-white hover:bg-white/10">
+              Operations dashboard
+            </Badge>
+            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              Turn every upload into an organized workflow.
+            </h2>
+            <p className="text-sm leading-6 text-white/70 sm:text-base">
+              Create your five-agent team, validate each spreadsheet, and share leads evenly in
+              seconds.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-white/75">
+            <CheckCircle2 className="h-4 w-4 text-emerald-300" /> Secure admin workspace
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-3">
+        <StatCard
+          icon={Users}
+          label="Team members"
+          value={`${agents.length}`}
+          detail={`${Math.min(agents.length, REQUIRED_AGENT_COUNT)}/${REQUIRED_AGENT_COUNT} distribution seats filled`}
+        />
+        <StatCard
+          icon={ListChecks}
+          label="Assigned records"
+          value={`${assignedCount}`}
+          detail="Across all uploaded lists"
+        />
+        <StatCard
+          icon={FileSpreadsheet}
+          label="Upload batches"
+          value={`${batchCount}`}
+          detail="Validated and distributed"
+        />
+      </section>
+
+      <Tabs defaultValue="agents" className="w-full">
+        <TabsList className="grid h-auto w-full grid-cols-3 rounded-xl bg-muted p-1 sm:w-fit">
+          <TabsTrigger value="agents" className="gap-2 px-4 py-2.5">
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Agents</span>
+          </TabsTrigger>
+          <TabsTrigger value="upload" className="gap-2 px-4 py-2.5">
+            <Upload className="h-4 w-4" />
+            <span className="hidden sm:inline">Upload & distribute</span>
+          </TabsTrigger>
+          <TabsTrigger value="lists" className="gap-2 px-4 py-2.5">
+            <ListChecks className="h-4 w-4" />
+            <span className="hidden sm:inline">Assigned lists</span>
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="agents" className="mt-6">
+          <AgentsPanel />
+        </TabsContent>
+        <TabsContent value="upload" className="mt-6">
+          <UploadPanel />
+        </TabsContent>
+        <TabsContent value="lists" className="mt-6">
+          <ListsPanel />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: typeof Users;
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <Card className="shadow-sm">
+      <CardContent className="flex items-center gap-4 p-5">
+        <div className="rounded-xl bg-primary/10 p-3 text-primary">
+          <Icon className="h-5 w-5" />
+        </div>
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {label}
+          </p>
+          <p className="text-2xl font-semibold">{value}</p>
+          <p className="text-xs text-muted-foreground">{detail}</p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
 function AgentsPanel() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   const listFn = useServerFn(listAgents);
   const createFn = useServerFn(createAgent);
   const deleteFn = useServerFn(deleteAgent);
-
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ["agents"],
     queryFn: () => listFn(),
   });
-
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [countryCode, setCountryCode] = useState("+91");
-  const [mobile, setMobile] = useState("");
-
-  const createM = useMutation({
-    mutationFn: (input: { name: string; email: string; countryCode: string; mobile: string }) =>
-      createFn({ data: input }),
-    onSuccess: () => {
-      toast.success("Agent added");
-      setName(""); setEmail(""); setMobile(""); setCountryCode("+91");
-      qc.invalidateQueries({ queryKey: ["agents"] });
-      qc.invalidateQueries({ queryKey: ["lists"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    countryCode: "+1",
+    mobile: "",
+    password: "",
   });
 
-  const deleteM = useMutation({
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["agents"] });
+    queryClient.invalidateQueries({ queryKey: ["lists"] });
+  };
+  const createMutation = useMutation({
+    mutationFn: () => createFn({ data: form }),
+    onSuccess: () => {
+      toast.success("Agent account created");
+      setForm({ name: "", email: "", countryCode: "+1", mobile: "", password: "" });
+      refresh();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteFn({ data: { id } }),
     onSuccess: () => {
       toast.success("Agent removed");
-      qc.invalidateQueries({ queryKey: ["agents"] });
-      qc.invalidateQueries({ queryKey: ["lists"] });
+      refresh();
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (error: Error) => toast.error(error.message),
   });
-
-  const onSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    createM.mutate({ name, email, countryCode, mobile });
-  };
+  const update = (field: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement>) =>
+    setForm({ ...form, [field]: event.target.value });
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
-      <Card>
+    <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+      <Card className="h-fit shadow-sm">
         <CardHeader>
-          <CardTitle><h2 className="text-lg font-semibold">Add Agent</h2></CardTitle>
-          <CardDescription>Create a new agent account.</CardDescription>
+          <CardTitle>Add an agent</CardTitle>
+          <CardDescription>Create a secure team account for list assignments.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={onSubmit} className="space-y-3">
-            <div className="space-y-1"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} required /></div>
-            <div className="space-y-1"><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
-            <div className="grid grid-cols-[100px_1fr] gap-2">
-              <div className="space-y-1"><Label>Code</Label><Input value={countryCode} onChange={(e) => setCountryCode(e.target.value)} placeholder="+91" required /></div>
-              <div className="space-y-1"><Label>Mobile</Label><Input value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="9876543210" required /></div>
+          <form
+            className="space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              createMutation.mutate();
+            }}
+          >
+            <FormField label="Full name" id="name">
+              <Input
+                id="name"
+                value={form.name}
+                onChange={update("name")}
+                placeholder="e.g. Maya Patel"
+                required
+              />
+            </FormField>
+            <FormField label="Email address" id="email">
+              <Input
+                id="email"
+                type="email"
+                value={form.email}
+                onChange={update("email")}
+                placeholder="maya@company.com"
+                required
+              />
+            </FormField>
+            <div className="grid grid-cols-[86px_1fr] gap-2">
+              <FormField label="Code" id="code">
+                <Input
+                  id="code"
+                  value={form.countryCode}
+                  onChange={update("countryCode")}
+                  required
+                />
+              </FormField>
+              <FormField label="Mobile number" id="mobile">
+                <Input
+                  id="mobile"
+                  inputMode="numeric"
+                  value={form.mobile}
+                  onChange={update("mobile")}
+                  placeholder="5551234567"
+                  required
+                />
+              </FormField>
             </div>
-            <Button type="submit" className="w-full" disabled={createM.isPending}>
-              <Plus className="h-4 w-4 mr-2" />{createM.isPending ? "Adding..." : "Add Agent"}
+            <FormField label="Temporary password" id="agent-password">
+              <Input
+                id="agent-password"
+                type="password"
+                autoComplete="new-password"
+                value={form.password}
+                onChange={update("password")}
+                placeholder="8+ chars, letter & number"
+                required
+              />
+            </FormField>
+            <Button className="w-full" disabled={createMutation.isPending}>
+              <Plus className="mr-2 h-4 w-4" />
+              {createMutation.isPending ? "Creating..." : "Create agent"}
             </Button>
           </form>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle><h2 className="text-lg font-semibold">Agents ({agents.length})</h2></CardTitle>
-          <CardDescription>Lists are distributed among the first 5 agents (in creation order).</CardDescription>
+      <Card className="shadow-sm">
+        <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+          <div>
+            <CardTitle>Your team</CardTitle>
+            <CardDescription className="mt-1">
+              The first five agents receive new list items in sequence.
+            </CardDescription>
+          </div>
+          <Badge variant={agents.length >= REQUIRED_AGENT_COUNT ? "default" : "secondary"}>
+            {Math.min(agents.length, REQUIRED_AGENT_COUNT)}/{REQUIRED_AGENT_COUNT} ready
+          </Badge>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <EmptyMessage>Loading agents...</EmptyMessage>
           ) : agents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No agents yet. Add your first agent.</p>
+            <EmptyMessage>Add your first team member to begin.</EmptyMessage>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Mobile</TableHead>
-                  <TableHead className="w-12"></TableHead>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-12" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {agents.map((a, i) => (
-                  <TableRow key={a.id}>
-                    <TableCell className="font-medium">
-                      {a.name}
-                      {i < 5 && <Badge variant="secondary" className="ml-2">#{i + 1}</Badge>}
-                    </TableCell>
-                    <TableCell>{a.email}</TableCell>
-                    <TableCell>{a.country_code} {a.mobile}</TableCell>
+                {agents.map((agent, index) => (
+                  <TableRow key={agent.id}>
                     <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => deleteM.mutate(a.id)}>
-                        <Trash2 className="h-4 w-4" />
+                      <p className="font-medium">{agent.name}</p>
+                      <p className="text-xs text-muted-foreground">{agent.email}</p>
+                    </TableCell>
+                    <TableCell>
+                      {agent.country_code} {agent.mobile}
+                    </TableCell>
+                    <TableCell>
+                      {index < REQUIRED_AGENT_COUNT ? (
+                        <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                          Seat {index + 1}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">Standby</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Delete ${agent.name}`}
+                        onClick={() => deleteMutation.mutate(agent.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -153,151 +336,249 @@ function AgentsPanel() {
 }
 
 function UploadPanel() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
+  const listFn = useServerFn(listAgents);
   const distributeFn = useServerFn(distributeItems);
+  const { data: agents = [] } = useQuery({ queryKey: ["agents"], queryFn: () => listFn() });
   const [parsed, setParsed] = useState<ParsedItem[] | null>(null);
-  const [fileName, setFileName] = useState<string>("");
+  const [fileName, setFileName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const ready = agents.length >= REQUIRED_AGENT_COUNT;
 
-  const distM = useMutation({
+  const mutation = useMutation({
     mutationFn: (items: ParsedItem[]) => distributeFn({ data: { items } }),
-    onSuccess: (res) => {
-      toast.success(`Distributed ${res.count} items across ${res.agentCount} agent(s)`);
+    onSuccess: (result) => {
+      toast.success(`Distributed ${result.count} items equally across ${result.agentCount} agents`);
       setParsed(null);
       setFileName("");
       if (inputRef.current) inputRef.current.value = "";
-      qc.invalidateQueries({ queryKey: ["lists"] });
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (error: Error) => toast.error(error.message),
   });
-
-  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
+  const onFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
     try {
-      const items = await parseFile(f);
+      const items = await parseFile(file);
       setParsed(items);
-      setFileName(f.name);
-      toast.success(`Parsed ${items.length} rows from ${f.name}`);
-    } catch (err) {
+      setFileName(file.name);
+      toast.success(`${items.length} valid rows are ready`);
+    } catch (error) {
       setParsed(null);
       setFileName("");
       if (inputRef.current) inputRef.current.value = "";
-      toast.error(err instanceof Error ? err.message : "Failed to parse file");
+      toast.error(error instanceof Error ? error.message : "Could not read that file");
     }
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle><h2 className="text-lg font-semibold">Upload CSV / Excel</h2></CardTitle>
-        <CardDescription>
-          Accepted: <code>.csv, .xlsx, .xls</code>. Required columns: <strong>FirstName</strong>, <strong>Phone</strong>. Optional: <strong>Notes</strong>.
-          Items are distributed equally among the first 5 agents (extras go round-robin).
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="file">File</Label>
-          <Input id="file" ref={inputRef} type="file" accept=".csv,.xlsx,.xls" onChange={onFile} />
-        </div>
-
-        {parsed && (
-          <div className="space-y-3">
-            <div className="rounded-md border p-3 text-sm">
-              <p><strong>{fileName}</strong> — {parsed.length} valid rows ready to distribute.</p>
+    <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle>Upload a customer list</CardTitle>
+          <CardDescription>
+            Use a CSV or Excel file with FirstName, Phone, and Notes columns. Every row is validated
+            before distribution.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <label
+            className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-primary/25 bg-primary/[0.03] px-6 py-10 text-center transition hover:bg-primary/[0.06]"
+            htmlFor="list-file"
+          >
+            <span className="mb-3 rounded-full bg-primary/10 p-3 text-primary">
+              <Upload className="h-6 w-6" />
+            </span>
+            <span className="font-medium">Choose a spreadsheet to upload</span>
+            <span className="mt-1 text-xs text-muted-foreground">
+              .csv, .xlsx or .xls · Maximum 5 MB · Up to 10,000 rows
+            </span>
+          </label>
+          <Input
+            id="list-file"
+            ref={inputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            onChange={onFile}
+            className="sr-only"
+          />
+          {parsed && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/40 p-4">
+                <div>
+                  <p className="font-medium">{fileName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {parsed.length} valid records ready to assign
+                  </p>
+                </div>
+                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                  <CheckCircle2 className="mr-1 h-3 w-3" />
+                  Validated
+                </Badge>
+              </div>
+              <div className="max-h-72 overflow-auto rounded-xl border">
+                <PreviewTable items={parsed} />
+              </div>
+              <Button
+                disabled={!ready || mutation.isPending}
+                onClick={() => mutation.mutate(parsed)}
+              >
+                {mutation.isPending ? "Distributing..." : "Distribute list"}
+                <ArrowUpRight className="ml-2 h-4 w-4" />
+              </Button>
             </div>
-            <div className="rounded-md border max-h-72 overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>FirstName</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Notes</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {parsed.slice(0, 50).map((r, i) => (
-                    <TableRow key={i}>
-                      <TableCell>{r.firstName}</TableCell>
-                      <TableCell>{r.phone}</TableCell>
-                      <TableCell className="text-muted-foreground">{r.notes}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {parsed.length > 50 && (
-                <p className="p-2 text-xs text-muted-foreground">Showing first 50 of {parsed.length} rows.</p>
-              )}
-            </div>
-            <Button onClick={() => distM.mutate(parsed)} disabled={distM.isPending}>
-              {distM.isPending ? "Distributing..." : "Distribute to Agents"}
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </CardContent>
+      </Card>
+      <Card className="h-fit shadow-sm">
+        <CardHeader>
+          <CardTitle>Distribution readiness</CardTitle>
+          <CardDescription>Complete these checks before sharing a list.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          <ReadinessRow
+            done={ready}
+            text={`${Math.min(agents.length, REQUIRED_AGENT_COUNT)} of ${REQUIRED_AGENT_COUNT} agent seats filled`}
+          />
+          <ReadinessRow
+            done={Boolean(parsed)}
+            text={
+              parsed
+                ? `${parsed.length} spreadsheet rows validated`
+                : "Spreadsheet uploaded and validated"
+            }
+          />
+          <p className="rounded-xl bg-muted p-3 text-xs leading-5 text-muted-foreground">
+            Records are assigned round-robin. If the total cannot be divided evenly by five, the
+            first agents receive one additional record in sequence.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
 function ListsPanel() {
   const fn = useServerFn(listDistributedItems);
-  const { data, isLoading } = useQuery({
-    queryKey: ["lists"],
-    queryFn: () => fn(),
-  });
-
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
-  if (!data || data.agents.length === 0) {
-    return <p className="text-sm text-muted-foreground">Add agents and upload a list to see distributions.</p>;
-  }
-
-  const itemsByAgent = new Map<string, typeof data.items>();
-  for (const a of data.agents) itemsByAgent.set(a.id, []);
-  for (const it of data.items) {
-    const arr = itemsByAgent.get(it.agent_id);
-    if (arr) arr.push(it);
-  }
-
+  const { data, isLoading } = useQuery({ queryKey: ["lists"], queryFn: () => fn() });
+  if (isLoading) return <EmptyMessage>Loading assigned lists...</EmptyMessage>;
+  if (!data?.agents.length)
+    return <EmptyMessage>Add five agents and upload a list to see assignments.</EmptyMessage>;
+  const activeAgents = data.agents.slice(0, REQUIRED_AGENT_COUNT);
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {data.agents.map((a) => {
-        const items = itemsByAgent.get(a.id) ?? [];
+    <div className="grid gap-4 xl:grid-cols-2">
+      {activeAgents.map((agent, index) => {
+        const items = data.items.filter((item) => item.agent_id === agent.id);
         return (
-          <Card key={a.id}>
-            <CardHeader>
-              <CardTitle><h3 className="text-base font-semibold">{a.name}</h3></CardTitle>
-              <CardDescription>{a.email} · {items.length} item(s)</CardDescription>
+          <Card key={agent.id} className="shadow-sm">
+            <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+              <div>
+                <CardTitle>{agent.name}</CardTitle>
+                <CardDescription className="mt-1">
+                  {agent.email} · {agent.country_code} {agent.mobile}
+                </CardDescription>
+              </div>
+              <Badge variant="secondary">
+                Seat {index + 1} · {items.length} items
+              </Badge>
             </CardHeader>
             <CardContent>
-              {items.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No items assigned.</p>
-              ) : (
-                <div className="max-h-80 overflow-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Phone</TableHead>
-                        <TableHead>Notes</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {items.map((it) => (
-                        <TableRow key={it.id}>
-                          <TableCell className="font-medium">{it.first_name}</TableCell>
-                          <TableCell>{it.phone}</TableCell>
-                          <TableCell className="text-muted-foreground text-sm">{it.notes}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+              {items.length ? (
+                <div className="max-h-80 overflow-auto rounded-xl border">
+                  <AssignedTable items={items} />
                 </div>
+              ) : (
+                <EmptyMessage>No items assigned yet.</EmptyMessage>
               )}
             </CardContent>
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+function PreviewTable({ items }: { items: ParsedItem[] }) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>First name</TableHead>
+          <TableHead>Phone</TableHead>
+          <TableHead>Notes</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {items.slice(0, 50).map((item, index) => (
+          <TableRow key={`${item.phone}-${index}`}>
+            <TableCell className="font-medium">{item.firstName}</TableCell>
+            <TableCell>{item.phone}</TableCell>
+            <TableCell className="text-muted-foreground">{item.notes || "—"}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+function AssignedTable({
+  items,
+}: {
+  items: { id: string; first_name: string; phone: string; notes: string | null }[];
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>First name</TableHead>
+          <TableHead>Phone</TableHead>
+          <TableHead>Notes</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {items.map((item) => (
+          <TableRow key={item.id}>
+            <TableCell className="font-medium">{item.first_name}</TableCell>
+            <TableCell>{item.phone}</TableCell>
+            <TableCell className="text-muted-foreground">{item.notes || "—"}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+function FormField({
+  id,
+  label,
+  children,
+}: {
+  id: string;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      {children}
+    </div>
+  );
+}
+function ReadinessRow({ done, text }: { done: boolean; text: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span
+        className={`rounded-full p-1 ${done ? "bg-emerald-100 text-emerald-600" : "bg-muted text-muted-foreground"}`}
+      >
+        {done ? <CheckCircle2 className="h-4 w-4" /> : <LockKeyhole className="h-4 w-4" />}
+      </span>
+      <span>{text}</span>
+    </div>
+  );
+}
+function EmptyMessage({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+      {children}
     </div>
   );
 }

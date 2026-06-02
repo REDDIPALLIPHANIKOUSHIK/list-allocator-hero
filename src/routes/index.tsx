@@ -11,7 +11,10 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Agent Manager" },
-      { name: "description", content: "Admin dashboard for managing agents and distributing CSV lists." },
+      {
+        name: "description",
+        content: "Admin dashboard for managing agents and distributing CSV lists.",
+      },
     ],
   }),
   component: Index,

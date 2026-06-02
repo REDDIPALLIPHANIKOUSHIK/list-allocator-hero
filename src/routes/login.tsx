@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { Network, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
@@ -29,6 +30,7 @@ const schema = z.object({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const router = useRouter();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,13 +46,21 @@ function LoginPage() {
     setLoading(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email: parsed.data.email,
           password: parsed.data.password,
           options: { emailRedirectTo: `${window.location.origin}/dashboard` },
         });
         if (error) throw error;
-        toast.success("Account created. You can sign in now.");
+        if (data.session) {
+          toast.success("Account created. Welcome to ListFlow!");
+          await router.invalidate();
+          await navigate({ to: "/dashboard" });
+          return;
+        }
+        toast.success("Account created. Check your email to confirm your account, then sign in.", {
+          duration: 8000,
+        });
         setMode("login");
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -59,7 +69,8 @@ function LoginPage() {
         });
         if (error) throw error;
         toast.success("Welcome back!");
-        navigate({ to: "/dashboard" });
+        await router.invalidate();
+        await navigate({ to: "/dashboard" });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Authentication failed");
@@ -69,9 +80,18 @@ function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,oklch(0.92_0.06_255),transparent_45%)] p-4">
+      <Card className="w-full max-w-md shadow-xl">
         <CardHeader>
+          <div className="mb-3 flex items-center gap-3">
+            <span className="rounded-xl bg-primary p-2 text-primary-foreground">
+              <Network className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-semibold">ListFlow</p>
+              <p className="text-xs text-muted-foreground">Lead allocation workspace</p>
+            </div>
+          </div>
           <CardTitle>
             <h1 className="text-2xl font-semibold">
               {mode === "login" ? "Admin Login" : "Create Admin Account"}
@@ -120,6 +140,13 @@ function LoginPage() {
                 : "Already have an account? Sign in"}
             </button>
           </form>
+          <Button asChild variant="outline" className="mt-4 w-full">
+            <Link to="/demo">Preview dashboard without signing in</Link>
+          </Button>
+          <div className="mt-5 flex items-center justify-center gap-2 border-t pt-4 text-xs text-muted-foreground">
+            <ShieldCheck className="h-4 w-4" />
+            JWT-secured admin access
+          </div>
         </CardContent>
       </Card>
     </main>
