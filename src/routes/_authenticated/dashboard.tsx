@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   ArrowUpRight,
@@ -29,14 +28,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { createAgent, deleteAgent, listAgents } from "@/lib/agents.functions";
 import { parseFile, type ParsedItem } from "@/lib/csv-parser";
-import { distributeItems, listDistributedItems } from "@/lib/lists.functions";
 import {
   createLocalAgent,
   deleteLocalAgent,
   distributeLocalItems,
-  isLocalWorkspace,
   listLocalAgents,
   listLocalDistributedItems,
 } from "@/lib/local-workspace";
@@ -54,15 +50,13 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 });
 
 function DashboardPage() {
-  const listFn = useServerFn(listAgents);
-  const listsFn = useServerFn(listDistributedItems);
   const { data: agents = [] } = useQuery({
     queryKey: ["agents"],
-    queryFn: () => (isLocalWorkspace() ? listLocalAgents() : listFn()),
+    queryFn: listLocalAgents,
   });
   const { data: lists } = useQuery({
     queryKey: ["lists"],
-    queryFn: () => (isLocalWorkspace() ? listLocalDistributedItems() : listsFn()),
+    queryFn: listLocalDistributedItems,
   });
   const assignedCount = lists?.items.length ?? 0;
   const batchCount = new Set(lists?.items.map((item) => item.batch_id)).size;
@@ -170,12 +164,9 @@ function StatCard({
 
 function AgentsPanel() {
   const queryClient = useQueryClient();
-  const listFn = useServerFn(listAgents);
-  const createFn = useServerFn(createAgent);
-  const deleteFn = useServerFn(deleteAgent);
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ["agents"],
-    queryFn: () => (isLocalWorkspace() ? listLocalAgents() : listFn()),
+    queryFn: listLocalAgents,
   });
   const [form, setForm] = useState({
     name: "",
@@ -190,7 +181,7 @@ function AgentsPanel() {
     queryClient.invalidateQueries({ queryKey: ["lists"] });
   };
   const createMutation = useMutation({
-    mutationFn: () => (isLocalWorkspace() ? createLocalAgent(form) : createFn({ data: form })),
+    mutationFn: () => createLocalAgent(form),
     onSuccess: () => {
       toast.success("Agent account created");
       setForm({ name: "", email: "", countryCode: "+1", mobile: "", password: "" });
@@ -199,8 +190,7 @@ function AgentsPanel() {
     onError: (error: Error) => toast.error(error.message),
   });
   const deleteMutation = useMutation({
-    mutationFn: (id: string) =>
-      isLocalWorkspace() ? deleteLocalAgent(id) : deleteFn({ data: { id } }),
+    mutationFn: deleteLocalAgent,
     onSuccess: () => {
       toast.success("Agent removed");
       refresh();
@@ -352,11 +342,9 @@ function AgentsPanel() {
 
 function UploadPanel() {
   const queryClient = useQueryClient();
-  const listFn = useServerFn(listAgents);
-  const distributeFn = useServerFn(distributeItems);
   const { data: agents = [] } = useQuery({
     queryKey: ["agents"],
-    queryFn: () => (isLocalWorkspace() ? listLocalAgents() : listFn()),
+    queryFn: listLocalAgents,
   });
   const [parsed, setParsed] = useState<ParsedItem[] | null>(null);
   const [fileName, setFileName] = useState("");
@@ -364,8 +352,7 @@ function UploadPanel() {
   const ready = agents.length >= REQUIRED_AGENT_COUNT;
 
   const mutation = useMutation({
-    mutationFn: (items: ParsedItem[]) =>
-      isLocalWorkspace() ? distributeLocalItems(items) : distributeFn({ data: { items } }),
+    mutationFn: distributeLocalItems,
     onSuccess: (result) => {
       toast.success(`Distributed ${result.count} items equally across ${result.agentCount} agents`);
       setParsed(null);
@@ -479,10 +466,9 @@ function UploadPanel() {
 }
 
 function ListsPanel() {
-  const fn = useServerFn(listDistributedItems);
   const { data, isLoading } = useQuery({
     queryKey: ["lists"],
-    queryFn: () => (isLocalWorkspace() ? listLocalDistributedItems() : fn()),
+    queryFn: listLocalDistributedItems,
   });
   if (isLoading) return <EmptyMessage>Loading assigned lists...</EmptyMessage>;
   if (!data?.agents.length)

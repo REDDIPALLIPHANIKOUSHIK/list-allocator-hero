@@ -128,7 +128,9 @@ for (let index = 1; index <= 5; index += 1) {
     password: "AgentPass1",
   });
 }
-assert((await listLocalAgents()).length === 5, "Local agent creation failed");
+const localAgents = await listLocalAgents();
+assert(localAgents.length === 5, "Local agent creation failed");
+assert(!("password_hash" in localAgents[0]), "Local agent hash leaked into browser response");
 await distributeLocalItems(
   Array.from({ length: 7 }, (_, index) => ({
     firstName: `Lead ${index + 1}`,
@@ -148,6 +150,11 @@ signOutLocal();
 assert(!getLocalUser(), "Local logout failed");
 await signInLocal("admin@example.com", "AdminPass1");
 assert(getLocalUser()?.email === "admin@example.com", "Local login failed");
+assert((await listLocalAgents()).length === 5, "Local workspace was not preserved after login");
+assert(
+  (await listLocalDistributedItems()).items.length === 7,
+  "Local assignments were not preserved after login",
+);
 
 console.log(
   "Feature checks passed: local auth/workspace, agent credentials, CSV/XLSX/XLS validation, and five-agent allocation.",

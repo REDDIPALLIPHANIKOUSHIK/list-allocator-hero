@@ -1,27 +1,20 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { redirect } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { getLocalUser } from "@/lib/local-workspace";
 
 export const Route = createFileRoute("/")({
-  beforeLoad: async () => {
-    if (typeof window !== "undefined" && getLocalUser()) throw redirect({ to: "/dashboard" });
-    const { data } = await supabase.auth.getUser();
-    if (data.user) throw redirect({ to: "/dashboard" });
-    throw redirect({ to: "/login" });
+  beforeLoad: () => {
+    throw redirect({
+      to: typeof window !== "undefined" && getLocalUser() ? "/dashboard" : "/login",
+    });
   },
   head: () => ({
     meta: [
-      { title: "Agent Manager" },
+      { title: "ListFlow" },
       {
         name: "description",
-        content: "Admin dashboard for managing agents and distributing CSV lists.",
+        content: "Admin dashboard for managing agents and distributing lists.",
       },
     ],
   }),
-  component: Index,
+  component: () => null,
 });
-
-function Index() {
-  return null;
-}

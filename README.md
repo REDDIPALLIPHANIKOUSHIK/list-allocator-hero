@@ -6,9 +6,9 @@ ListFlow is an admin workspace for creating agent accounts, validating customer 
 
 ## Features
 
-- Immediately usable browser-local admin workspace for evaluation, plus JWT-backed Supabase sign-up, sign-in, protected routes, and sign-out for connected deployments.
+- Immediately usable browser-local admin sign-up, sign-in, protected routes, and sign-out with no external service required.
 - Agent creation with name, email, country code, mobile number, and a required temporary password.
-- One-way `scrypt` hashes for stored agent passwords; hashes are never selected into browser responses.
+- One-way salted hashes for browser-workspace passwords and `scrypt` hashes for the optional Supabase persistence path; agent hashes are never returned to UI views.
 - CSV, XLSX, and XLS uploads with required `FirstName`, `Phone`, and `Notes` headers.
 - Strict validation for extension, 5 MB file size, 10,000-row limit, required fields, phone values, and note length.
 - Round-robin distribution across exactly five agents. Remaining records are assigned sequentially from the first agent.
@@ -38,7 +38,7 @@ VITE_SUPABASE_URL="https://your-project.supabase.co"
 VITE_SUPABASE_PUBLISHABLE_KEY="your-publishable-key"
 ```
 
-Only the publishable key is exposed to the browser. Authorization remains protected by Supabase JWTs and database row-level security.
+The browser workspace does not require these values. They are retained for the optional Supabase server integration and migration reference.
 
 ## Database setup
 
@@ -57,11 +57,9 @@ bun install
 bun run dev
 ```
 
-Open the URL printed by Vite, keep **Local workspace** selected, create an admin account, and sign in. Local workspace mode stores evaluation data in your browser so every feature works immediately without an external service. Add five agents, then upload a CSV or Excel file.
+Open the URL printed by Vite, create an admin account, and continue to the dashboard. ListFlow stores workspace data in your browser so every feature works immediately without an external service. Add five agents, then upload a CSV or Excel file.
 
-For a connected deployment, choose **Supabase** on the login page instead. If Supabase email confirmation is enabled, confirm the account from the email before signing in.
-
-To inspect the interface before creating or confirming an account, use the **Preview dashboard without signing in** action on the login screen. The `/demo` route is intentionally read-only; authenticated admins continue to use `/dashboard` for agent creation and list distribution.
+The optional `/demo` route provides a read-only interface preview. Use `/dashboard` after creating an account for functional agent creation and list distribution.
 
 ## Spreadsheet format
 

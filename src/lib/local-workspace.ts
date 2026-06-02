@@ -25,7 +25,8 @@ export type LocalListItem = {
   notes: string | null;
   created_at: string;
 };
-type LocalWorkspace = { agents: LocalAgent[]; items: LocalListItem[] };
+type StoredLocalAgent = LocalAgent & { password_hash: string };
+type LocalWorkspace = { agents: StoredLocalAgent[]; items: LocalListItem[] };
 
 function storage() {
   if (typeof window === "undefined")
@@ -53,10 +54,18 @@ function getWorkspace(userId: string) {
 function saveWorkspace(userId: string, workspace: LocalWorkspace) {
   write(workspaceKey(userId), workspace);
 }
-async function hash(value: string) {
+async function digest(value: string) {
   const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const result = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(result), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+async function hashPassword(password: string) {
+  const salt = crypto.randomUUID();
+  return `${salt}:${await digest(`${salt}:${password}`)}`;
+}
+async function passwordMatches(password: string, storedHash: string) {
+  const [salt, expected] = storedHash.split(":");
+  return Boolean(salt && expected && (await digest(`${salt}:${password}`)) === expected);
 }
 function currentUser() {
   const user = getLocalUser();
@@ -76,7 +85,7 @@ export async function signUpLocal(email: string, password: string) {
   if (accounts.some((account) => account.email === normalizedEmail))
     throw new Error("A local admin account with this email already exists.");
   const user = { id: crypto.randomUUID(), email: normalizedEmail };
-  accounts.push({ ...user, passwordHash: await hash(password) });
+  accounts.push({ ...user, passwordHash: await hashPassword(password) });
   write(ACCOUNTS_KEY, accounts);
   write(SESSION_KEY, user);
   saveWorkspace(user.id, { agents: [], items: [] });
@@ -86,7 +95,7 @@ export async function signInLocal(email: string, password: string) {
   const normalizedEmail = email.trim().toLowerCase();
   const accounts = read<LocalAccount[]>(ACCOUNTS_KEY, []);
   const account = accounts.find((candidate) => candidate.email === normalizedEmail);
-  if (!account || account.passwordHash !== (await hash(password)))
+  if (!account || !(await passwordMatches(password, account.passwordHash)))
     throw new Error("Invalid local email or password.");
   const user = { id: account.id, email: account.email };
   write(SESSION_KEY, user);
@@ -95,8 +104,11 @@ export async function signInLocal(email: string, password: string) {
 export function signOutLocal() {
   storage().removeItem(SESSION_KEY);
 }
+function publicAgents(agents: StoredLocalAgent[]): LocalAgent[] {
+  return agents.map(({ password_hash: _passwordHash, ...agent }) => agent);
+}
 export async function listLocalAgents() {
-  return getWorkspace(currentUser().id).agents;
+  return publicAgents(getWorkspace(currentUser().id).agents);
 }
 export async function createLocalAgent(input: unknown) {
   const user = currentUser();
@@ -104,13 +116,14 @@ export async function createLocalAgent(input: unknown) {
   const workspace = getWorkspace(user.id);
   if (workspace.agents.some((agent) => agent.email === data.email.toLowerCase()))
     throw new Error("An agent with this email already exists.");
-  const agent: LocalAgent = {
+  const agent: StoredLocalAgent = {
     id: crypto.randomUUID(),
     name: data.name,
     email: data.email.toLowerCase(),
     country_code: data.countryCode,
     mobile: data.mobile,
     created_at: new Date().toISOString(),
+    password_hash: await hashPassword(data.password),
   };
   workspace.agents.push(agent);
   saveWorkspace(user.id, workspace);
@@ -152,5 +165,5 @@ export async function distributeLocalItems(items: ParsedItem[]) {
 }
 export async function listLocalDistributedItems() {
   const workspace = getWorkspace(currentUser().id);
-  return { agents: workspace.agents, items: workspace.items };
+  return { agents: publicAgents(workspace.agents), items: workspace.items };
 }
