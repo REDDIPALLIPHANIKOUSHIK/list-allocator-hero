@@ -57,14 +57,13 @@ function AgentsPanel() {
   const [email, setEmail] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
   const [mobile, setMobile] = useState("");
-  const [password, setPassword] = useState("");
 
   const createM = useMutation({
-    mutationFn: (input: { name: string; email: string; countryCode: string; mobile: string; password: string }) =>
+    mutationFn: (input: { name: string; email: string; countryCode: string; mobile: string }) =>
       createFn({ data: input }),
     onSuccess: () => {
       toast.success("Agent added");
-      setName(""); setEmail(""); setMobile(""); setPassword(""); setCountryCode("+91");
+      setName(""); setEmail(""); setMobile(""); setCountryCode("+91");
       qc.invalidateQueries({ queryKey: ["agents"] });
       qc.invalidateQueries({ queryKey: ["lists"] });
     },
@@ -83,7 +82,7 @@ function AgentsPanel() {
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createM.mutate({ name, email, countryCode, mobile, password });
+    createM.mutate({ name, email, countryCode, mobile });
   };
 
   return (
@@ -101,7 +100,6 @@ function AgentsPanel() {
               <div className="space-y-1"><Label>Code</Label><Input value={countryCode} onChange={(e) => setCountryCode(e.target.value)} placeholder="+91" required /></div>
               <div className="space-y-1"><Label>Mobile</Label><Input value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="9876543210" required /></div>
             </div>
-            <div className="space-y-1"><Label>Password</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
             <Button type="submit" className="w-full" disabled={createM.isPending}>
               <Plus className="h-4 w-4 mr-2" />{createM.isPending ? "Adding..." : "Add Agent"}
             </Button>
