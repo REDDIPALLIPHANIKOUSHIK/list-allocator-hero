@@ -14,7 +14,80 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      agents: {
+        Row: {
+          country_code: string
+          created_at: string
+          email: string
+          id: string
+          mobile: string
+          name: string
+          owner_id: string
+          password_hash: string
+        }
+        Insert: {
+          country_code: string
+          created_at?: string
+          email: string
+          id?: string
+          mobile: string
+          name: string
+          owner_id: string
+          password_hash: string
+        }
+        Update: {
+          country_code?: string
+          created_at?: string
+          email?: string
+          id?: string
+          mobile?: string
+          name?: string
+          owner_id?: string
+          password_hash?: string
+        }
+        Relationships: []
+      }
+      list_items: {
+        Row: {
+          agent_id: string
+          batch_id: string
+          created_at: string
+          first_name: string
+          id: string
+          notes: string | null
+          owner_id: string
+          phone: string
+        }
+        Insert: {
+          agent_id: string
+          batch_id: string
+          created_at?: string
+          first_name: string
+          id?: string
+          notes?: string | null
+          owner_id: string
+          phone: string
+        }
+        Update: {
+          agent_id?: string
+          batch_id?: string
+          created_at?: string
+          first_name?: string
+          id?: string
+          notes?: string | null
+          owner_id?: string
+          phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "list_items_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
