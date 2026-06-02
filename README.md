@@ -6,7 +6,7 @@ ListFlow is an admin workspace for creating agent accounts, validating customer 
 
 ## Features
 
-- JWT-backed admin sign-up, sign-in, protected routes, and sign-out through Supabase Auth.
+- Immediately usable browser-local admin workspace for evaluation, plus JWT-backed Supabase sign-up, sign-in, protected routes, and sign-out for connected deployments.
 - Agent creation with name, email, country code, mobile number, and a required temporary password.
 - One-way `scrypt` hashes for stored agent passwords; hashes are never selected into browser responses.
 - CSV, XLSX, and XLS uploads with required `FirstName`, `Phone`, and `Notes` headers.
@@ -57,7 +57,9 @@ bun install
 bun run dev
 ```
 
-Open the URL printed by Vite, create an admin account, and sign in. Add five agents, then upload a CSV or Excel file. If Supabase email confirmation is enabled, confirm the account from the email before signing in.
+Open the URL printed by Vite, keep **Local workspace** selected, create an admin account, and sign in. Local workspace mode stores evaluation data in your browser so every feature works immediately without an external service. Add five agents, then upload a CSV or Excel file.
+
+For a connected deployment, choose **Supabase** on the login page instead. If Supabase email confirmation is enabled, confirm the account from the email before signing in.
 
 To inspect the interface before creating or confirming an account, use the **Preview dashboard without signing in** action on the login screen. The `/demo` route is intentionally read-only; authenticated admins continue to use `/dashboard` for agent creation and list distribution.
 

@@ -2,6 +2,16 @@ import * as XLSX from "xlsx";
 import { agentSchema, hashAgentPassword } from "../src/lib/agent-credentials";
 import { allocateAgentIds } from "../src/lib/allocation";
 import { parseFile } from "../src/lib/csv-parser";
+import {
+  createLocalAgent,
+  distributeLocalItems,
+  getLocalUser,
+  listLocalAgents,
+  listLocalDistributedItems,
+  signInLocal,
+  signOutLocal,
+  signUpLocal,
+} from "../src/lib/local-workspace";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -96,6 +106,49 @@ try {
   );
 }
 
+const memory = new Map<string, string>();
+Object.defineProperty(globalThis, "window", {
+  configurable: true,
+  value: {
+    localStorage: {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => memory.set(key, value),
+      removeItem: (key: string) => memory.delete(key),
+    },
+  },
+});
+await signUpLocal("admin@example.com", "AdminPass1");
+assert(getLocalUser()?.email === "admin@example.com", "Local signup did not create a session");
+for (let index = 1; index <= 5; index += 1) {
+  await createLocalAgent({
+    name: `Agent ${index}`,
+    email: `agent${index}@example.com`,
+    countryCode: "+1",
+    mobile: `555123456${index}`,
+    password: "AgentPass1",
+  });
+}
+assert((await listLocalAgents()).length === 5, "Local agent creation failed");
+await distributeLocalItems(
+  Array.from({ length: 7 }, (_, index) => ({
+    firstName: `Lead ${index + 1}`,
+    phone: `+1555000000${index}`,
+    notes: "",
+  })),
+);
+const localLists = await listLocalDistributedItems();
+assert(localLists.items.length === 7, "Local list distribution failed");
+assert(
+  localLists.agents
+    .map((agent) => localLists.items.filter((item) => item.agent_id === agent.id).length)
+    .join(",") === "2,2,1,1,1",
+  "Local remainder distribution failed",
+);
+signOutLocal();
+assert(!getLocalUser(), "Local logout failed");
+await signInLocal("admin@example.com", "AdminPass1");
+assert(getLocalUser()?.email === "admin@example.com", "Local login failed");
+
 console.log(
-  "Feature checks passed: agent credentials, CSV/XLSX/XLS validation, and five-agent allocation.",
+  "Feature checks passed: local auth/workspace, agent credentials, CSV/XLSX/XLS validation, and five-agent allocation.",
 );

@@ -32,6 +32,14 @@ import {
 import { createAgent, deleteAgent, listAgents } from "@/lib/agents.functions";
 import { parseFile, type ParsedItem } from "@/lib/csv-parser";
 import { distributeItems, listDistributedItems } from "@/lib/lists.functions";
+import {
+  createLocalAgent,
+  deleteLocalAgent,
+  distributeLocalItems,
+  isLocalWorkspace,
+  listLocalAgents,
+  listLocalDistributedItems,
+} from "@/lib/local-workspace";
 
 const REQUIRED_AGENT_COUNT = 5;
 
@@ -48,8 +56,14 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 function DashboardPage() {
   const listFn = useServerFn(listAgents);
   const listsFn = useServerFn(listDistributedItems);
-  const { data: agents = [] } = useQuery({ queryKey: ["agents"], queryFn: () => listFn() });
-  const { data: lists } = useQuery({ queryKey: ["lists"], queryFn: () => listsFn() });
+  const { data: agents = [] } = useQuery({
+    queryKey: ["agents"],
+    queryFn: () => (isLocalWorkspace() ? listLocalAgents() : listFn()),
+  });
+  const { data: lists } = useQuery({
+    queryKey: ["lists"],
+    queryFn: () => (isLocalWorkspace() ? listLocalDistributedItems() : listsFn()),
+  });
   const assignedCount = lists?.items.length ?? 0;
   const batchCount = new Set(lists?.items.map((item) => item.batch_id)).size;
 
@@ -161,7 +175,7 @@ function AgentsPanel() {
   const deleteFn = useServerFn(deleteAgent);
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ["agents"],
-    queryFn: () => listFn(),
+    queryFn: () => (isLocalWorkspace() ? listLocalAgents() : listFn()),
   });
   const [form, setForm] = useState({
     name: "",
@@ -176,7 +190,7 @@ function AgentsPanel() {
     queryClient.invalidateQueries({ queryKey: ["lists"] });
   };
   const createMutation = useMutation({
-    mutationFn: () => createFn({ data: form }),
+    mutationFn: () => (isLocalWorkspace() ? createLocalAgent(form) : createFn({ data: form })),
     onSuccess: () => {
       toast.success("Agent account created");
       setForm({ name: "", email: "", countryCode: "+1", mobile: "", password: "" });
@@ -185,7 +199,8 @@ function AgentsPanel() {
     onError: (error: Error) => toast.error(error.message),
   });
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteFn({ data: { id } }),
+    mutationFn: (id: string) =>
+      isLocalWorkspace() ? deleteLocalAgent(id) : deleteFn({ data: { id } }),
     onSuccess: () => {
       toast.success("Agent removed");
       refresh();
@@ -339,14 +354,18 @@ function UploadPanel() {
   const queryClient = useQueryClient();
   const listFn = useServerFn(listAgents);
   const distributeFn = useServerFn(distributeItems);
-  const { data: agents = [] } = useQuery({ queryKey: ["agents"], queryFn: () => listFn() });
+  const { data: agents = [] } = useQuery({
+    queryKey: ["agents"],
+    queryFn: () => (isLocalWorkspace() ? listLocalAgents() : listFn()),
+  });
   const [parsed, setParsed] = useState<ParsedItem[] | null>(null);
   const [fileName, setFileName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const ready = agents.length >= REQUIRED_AGENT_COUNT;
 
   const mutation = useMutation({
-    mutationFn: (items: ParsedItem[]) => distributeFn({ data: { items } }),
+    mutationFn: (items: ParsedItem[]) =>
+      isLocalWorkspace() ? distributeLocalItems(items) : distributeFn({ data: { items } }),
     onSuccess: (result) => {
       toast.success(`Distributed ${result.count} items equally across ${result.agentCount} agents`);
       setParsed(null);
@@ -461,7 +480,10 @@ function UploadPanel() {
 
 function ListsPanel() {
   const fn = useServerFn(listDistributedItems);
-  const { data, isLoading } = useQuery({ queryKey: ["lists"], queryFn: () => fn() });
+  const { data, isLoading } = useQuery({
+    queryKey: ["lists"],
+    queryFn: () => (isLocalWorkspace() ? listLocalDistributedItems() : fn()),
+  });
   if (isLoading) return <EmptyMessage>Loading assigned lists...</EmptyMessage>;
   if (!data?.agents.length)
     return <EmptyMessage>Add five agents and upload a list to see assignments.</EmptyMessage>;
