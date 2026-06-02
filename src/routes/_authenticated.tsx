@@ -1,15 +1,16 @@
 import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { LogOut, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import { getLocalUser, signOutLocal } from "@/lib/local-workspace";
 
 export const Route = createFileRoute("/_authenticated")({
-  beforeLoad: async () => {
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) {
-      throw redirect({ to: "/login" });
-    }
-    return { user: data.user };
+  beforeLoad: () => {
+    // The workspace session lives in browser storage. During SSR we render a
+    // lightweight hydration state; the browser guard runs immediately after.
+    if (typeof window === "undefined") return { user: null };
+    const user = getLocalUser();
+    if (!user) throw redirect({ to: "/login" });
+    return { user };
   },
   component: AuthenticatedLayout,
 });
@@ -17,27 +18,39 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedLayout() {
   const { user } = Route.useRouteContext();
   const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  if (!user)
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Opening your workspace...
+      </div>
+    );
+  const handleLogout = () => {
+    signOutLocal();
     navigate({ to: "/login" });
   };
-
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
-        <div className="container mx-auto flex items-center justify-between py-4 px-4">
-          <div>
-            <h1 className="text-xl font-semibold">Agent Manager</h1>
-            <p className="text-xs text-muted-foreground">{user.email}</p>
+      <header className="border-b bg-card/90 backdrop-blur">
+        <div className="container mx-auto flex items-center justify-between px-4 py-4">
+          <div className="flex items-center gap-3">
+            <span className="rounded-xl bg-primary p-2 text-primary-foreground">
+              <Network className="h-5 w-5" />
+            </span>
+            <div>
+              <h1 className="font-semibold tracking-tight">ListFlow</h1>
+              <p className="text-xs text-muted-foreground">Lead allocation workspace</p>
+            </div>
           </div>
-          <Button variant="outline" size="sm" onClick={handleLogout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Sign out
-          </Button>
+          <div className="flex items-center gap-3">
+            <p className="hidden text-xs text-muted-foreground sm:block">{user.email}</p>
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </Button>
+          </div>
         </div>
       </header>
-      <main className="container mx-auto py-8 px-4">
+      <main className="container mx-auto px-4 py-7 sm:py-9">
         <Outlet />
       </main>
     </div>
